@@ -15,6 +15,7 @@ import (
 
 	"github.com/TaliaMarine/mailcatcher/internal/database"
 	ws "github.com/TaliaMarine/mailcatcher/internal/websocket"
+	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
 )
 
@@ -298,7 +299,19 @@ type session struct {
 	to      []string
 }
 
-func (s *session) AuthPlain(username, password string) error { return nil }
+// AuthMechanisms advertises AUTH so mail clients that refuse to send without
+// it (Apple Mail, Outlook) work. Any credentials are accepted: this is a catcher.
+func (s *session) AuthMechanisms() []string { return []string{sasl.Plain, sasl.Login} }
+
+func (s *session) Auth(mech string) (sasl.Server, error) {
+	switch mech {
+	case sasl.Plain:
+		return sasl.NewPlainServer(func(identity, username, password string) error { return nil }), nil
+	case sasl.Login:
+		return &loginServer{}, nil
+	}
+	return nil, smtp.ErrAuthUnknownMechanism
+}
 func (s *session) Mail(from string, opts *smtp.MailOptions) error {
 	s.from = from
 	return nil
@@ -316,3 +329,18 @@ func (s *session) Data(r io.Reader) error {
 }
 func (s *session) Reset()        {}
 func (s *session) Logout() error { return nil }
+
+// loginServer implements the legacy LOGIN mechanism (username, then password
+// prompts) and accepts anything.
+type loginServer struct{ step int }
+
+func (l *loginServer) Next(response []byte) (challenge []byte, done bool, err error) {
+	l.step++
+	switch l.step {
+	case 1:
+		return []byte("Username:"), false, nil
+	case 2:
+		return []byte("Password:"), false, nil
+	}
+	return nil, true, nil
+}

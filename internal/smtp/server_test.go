@@ -338,10 +338,13 @@ func TestSession_MailAndRcpt(t *testing.T) {
 	}
 }
 
-func TestSession_AuthPlain(t *testing.T) {
+func TestSession_AuthMechanisms(t *testing.T) {
 	s := &session{}
-	if err := s.AuthPlain("user", "pass"); err != nil {
-		t.Errorf("AuthPlain: %v", err)
+	if got := strings.Join(s.AuthMechanisms(), ","); got != "PLAIN,LOGIN" {
+		t.Errorf("AuthMechanisms = %q", got)
+	}
+	if _, err := s.Auth("CRAM-MD5"); err == nil {
+		t.Error("unknown mechanism accepted")
 	}
 }
 
