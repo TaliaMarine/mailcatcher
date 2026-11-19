@@ -46,6 +46,8 @@ type Config struct {
 	IMAPPublicHost    string
 	IMAPPublicTLSPort int
 	IMAPPublicPort    int
+	SMTPPublicPort    int // 0 hides it
+	SMTPPublicTLSPort int // 0 hides it
 
 	// TLS certificate shared by IMAPS, SMTPS and STARTTLS. When unset a
 	// self-signed certificate is generated at startup.
@@ -87,6 +89,8 @@ func Load() *Config {
 		IMAPPublicHost:    getEnv("IMAP_PUBLIC_HOST", ""),
 		IMAPPublicTLSPort: getEnvInt("IMAP_PUBLIC_TLS_PORT", 993),
 		IMAPPublicPort:    getEnvInt("IMAP_PUBLIC_PORT", 143),
+		SMTPPublicPort:    getEnvInt("SMTP_PUBLIC_PORT", 0),
+		SMTPPublicTLSPort: getEnvInt("SMTP_PUBLIC_TLS_PORT", 0),
 
 		TLSCertFile: getEnv("TLS_CERT_FILE", ""),
 		TLSKeyFile:  getEnv("TLS_KEY_FILE", ""),

@@ -40,6 +40,16 @@ const settings = computed(() => {
   ]
 })
 
+const smtpSettings = computed(() => {
+  const a = access.value
+  if (!a || (!a.smtp_port && !a.smtp_tls_port)) return []
+  const rows = [{ label: 'Server', value: a.host || location.hostname }]
+  if (a.smtp_tls_port) rows.push({ label: 'Port', value: `${a.smtp_tls_port}  (SSL/TLS)` })
+  if (a.smtp_port) rows.push({ label: a.smtp_tls_port ? 'Alternative' : 'Port', value: `${a.smtp_port}  (STARTTLS)` })
+  rows.push({ label: 'Login', value: 'not needed; any username and password is accepted' })
+  return rows
+})
+
 async function load() {
   try {
     access.value = await api.getImapAccess()
@@ -107,6 +117,30 @@ onMounted(load)
       Read captured mail in Thunderbird, Apple Mail or any IMAP client. You choose the username and password here;
       they're separate from your single sign-on account.
     </p>
+
+    <section v-if="smtpSettings.length" class="block" aria-labelledby="smtp-h">
+      <h2 id="smtp-h" class="text-subtitle-1 font-weight-medium mb-2">Send mail to this server</h2>
+      <dl class="mc-inset readout">
+        <template v-for="row in smtpSettings" :key="row.label">
+          <dt class="mc-muted">{{ row.label }}</dt>
+          <dd class="mono">
+            {{ row.value }}
+            <v-btn
+              v-if="row.label !== 'Login'"
+              icon
+              size="x-small"
+              :aria-label="`Copy SMTP ${row.label.toLowerCase()}`"
+              @click="copy(row.value.split(' ')[0], 'smtp-' + row.label)"
+            >
+              <v-icon size="14">{{ copied === 'smtp-' + row.label ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
+            </v-btn>
+          </dd>
+        </template>
+      </dl>
+      <p class="text-caption mc-muted mt-2">
+        Point an application's SMTP settings here and everything it sends is captured. Nothing is delivered onward.
+      </p>
+    </section>
 
     <v-progress-linear v-if="loading" indeterminate />
     <v-alert v-else-if="loadError" type="error" variant="tonal">{{ loadError }}</v-alert>

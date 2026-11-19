@@ -60,6 +60,8 @@ export interface ImapAccess {
   host?: string
   tls_port?: number
   starttls_port?: number
+  smtp_port?: number
+  smtp_tls_port?: number
 }
 
 export interface WsEvent {

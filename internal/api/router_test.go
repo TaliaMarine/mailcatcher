@@ -510,7 +510,7 @@ func TestCrossOriginWriteRejected(t *testing.T) {
 
 func imapAPI(t *testing.T) *API {
 	t.Helper()
-	cfg := &config.Config{AuthDisabled: true, LogFormat: "json", IMAPEnabled: true, IMAPPublicHost: "mail.example", IMAPPublicTLSPort: 993}
+	cfg := &config.Config{AuthDisabled: true, LogFormat: "json", IMAPEnabled: true, IMAPPublicHost: "mail.example", IMAPPublicTLSPort: 993, SMTPPublicPort: 25, SMTPPublicTLSPort: 465}
 	db, err := database.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -548,6 +548,9 @@ func TestIMAPCredentialsLifecycle(t *testing.T) {
 	w = doJSON(a, http.MethodPut, "/api/v1/imap/credentials", `{"username":"dev.user","password":"a long enough password"}`)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"username":"dev.user"`) || strings.Contains(w.Body.String(), "long enough") {
 		t.Fatalf("PUT = %d %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"smtp_port":25`) || !strings.Contains(w.Body.String(), `"smtp_tls_port":465`) {
+		t.Errorf("smtp ports missing: %s", w.Body.String())
 	}
 	if !strings.Contains(w.Body.String(), `"host":"mail.example"`) {
 		t.Errorf("host missing: %s", w.Body.String())

@@ -85,12 +85,18 @@ spec:
                   name: {{ .Values.authToken.secretRef.name }}
                   key: {{ .Values.authToken.secretRef.key }}
             {{- end }}
+            {{- if .Values.mail.hostname }}
+            - { name: IMAP_PUBLIC_HOST, value: {{ .Values.mail.hostname | quote }} }
+            - { name: SMTP_PUBLIC_PORT, value: {{ .Values.smtp.servicePort | quote }} }
+            {{- if .Values.smtp.tls.enabled }}
+            - { name: SMTP_PUBLIC_TLS_PORT, value: {{ .Values.smtp.tls.servicePort | quote }} }
+            {{- end }}
+            {{- end }}
             {{- if .Values.imap.enabled }}
             - { name: IMAP_ENABLED, value: "true" }
             - { name: IMAP_PORT, value: {{ .Values.imap.port | quote }} }
             - { name: IMAP_TLS_PORT, value: {{ .Values.imap.tlsPort | quote }} }
             - { name: CREDENTIAL_STORE, value: kubernetes }
-            - { name: IMAP_PUBLIC_HOST, value: {{ .Values.mail.hostname | quote }} }
             - { name: IMAP_PUBLIC_PORT, value: {{ .Values.imap.servicePort | quote }} }
             - { name: IMAP_PUBLIC_TLS_PORT, value: {{ .Values.imap.tlsServicePort | quote }} }
             {{- end }}

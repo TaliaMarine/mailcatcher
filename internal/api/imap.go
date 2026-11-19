@@ -20,6 +20,8 @@ type IMAPAccess struct {
 	Host         string     `json:"host,omitempty" doc:"IMAP server host name"`
 	TLSPort      int        `json:"tls_port,omitempty" doc:"Port for implicit TLS (IMAPS)"`
 	StartTLSPort int        `json:"starttls_port,omitempty" doc:"Port for plain connections upgraded with STARTTLS"`
+	SMTPPort     int        `json:"smtp_port,omitempty" doc:"Public SMTP port (STARTTLS when a certificate is configured)"`
+	SMTPTLSPort  int        `json:"smtp_tls_port,omitempty" doc:"Public SMTP port for implicit TLS (SMTPS)"`
 }
 
 type IMAPAccessOutput struct {
@@ -49,6 +51,8 @@ func (a *API) imapAccess(cred *credentials.Credential) IMAPAccess {
 		Host:         a.imapHost(),
 		TLSPort:      a.cfg.IMAPPublicTLSPort,
 		StartTLSPort: a.cfg.IMAPPublicPort,
+		SMTPPort:     a.cfg.SMTPPublicPort,
+		SMTPTLSPort:  a.cfg.SMTPPublicTLSPort,
 	}
 	if cred != nil {
 		acc.Configured = true
