@@ -18,7 +18,7 @@ docker run -p 1025:1025 -p 1080:1080 -e AUTH_DISABLED=true ghcr.io/taliamarine/m
 
 Send mail to `localhost:1025` and open http://localhost:1080.
 
-From source (Go 1.27+, Node.js 24+):
+From source (Go 1.27+, Node.js 26+):
 
 ```bash
 just build-web

@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Go 1.27+
-- Node.js 24+
+- Node.js 26+
 - [just](https://github.com/casey/just) command runner (recommended)
 - [golangci-lint](https://golangci-lint.run/) (for linting)
 
