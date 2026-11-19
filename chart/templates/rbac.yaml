@@ -1,0 +1,42 @@
+{{- /* The app talks to the Kubernetes API only to keep Secrets in its own
+namespace: the session key (created on first start) and, with IMAP enabled,
+one Secret per user-created IMAP login. */ -}}
+{{- $session := and .Values.oidc.issuerUrl .Values.sessionKey.autoGenerate }}
+{{- if or .Values.imap.enabled $session }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "mailcatcher.fullname" . }}
+  labels:
+    {{- include "mailcatcher.labels" . | nindent 4 }}
+rules:
+  {{- if .Values.imap.enabled }}
+  # IMAP logins: names are derived from usernames, so they cannot be listed ahead of time.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, create, update, delete]
+  {{- else }}
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ include "mailcatcher.sessionSecretName" . | quote }}]
+    verbs: [get]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "mailcatcher.fullname" . }}
+  labels:
+    {{- include "mailcatcher.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "mailcatcher.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "mailcatcher.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

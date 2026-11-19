@@ -1,0 +1,9 @@
+.idea/
+bin/
+*.db
+
+# Frontend
+web/node_modules/
+web/dist/
+*.db-shm
+*.db-wal

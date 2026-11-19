@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: go build ./...
+      - run: go vet ./...
+      - run: gofmt -l . | tee /tmp/gofmt.out && test ! -s /tmp/gofmt.out
+      - run: go test ./... -race
+
+  frontend:
+    name: Frontend (Vue)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  helm:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+      - run: helm lint chart --set oidc.issuerUrl=https://auth.example.com/application/o/mailcatcher/ --set oidc.clientId=x --set gateway.host=mail.example.com
+      - name: Render the default and the optional configurations
+        run: |
+          set -euo pipefail
+          helm template mc chart --set gateway.enabled=false --set authDisabled=true
+          helm template mc chart \
+            --set gateway.host=mail.example.com \
+            --set oidc.issuerUrl=https://auth.example.com/application/o/mailcatcher/ \
+            --set oidc.clientId=x \
+            --set imap.enabled=true --set mail.hostname=imap.example.com \
+            --set tls.certManager.enabled=true --set tls.certManager.issuerRef.name=letsencrypt \
+            --set persistence.enabled=true
+      - name: IMAP needs a public hostname
+        run: |
+          if helm template mc chart --set imap.enabled=true --set oidc.issuerUrl=https://a/ --set oidc.clientId=x --set gateway.host=m.example.com 2>/tmp/err; then
+            echo "::error::expected helm template to fail without mail.hostname"; exit 1
+          fi
+          grep -q "mail.hostname" /tmp/err
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

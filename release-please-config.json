@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "mailcatcher",
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        { "type": "yaml", "path": "chart/Chart.yaml", "jsonpath": "$.version" },
+        { "type": "yaml", "path": "chart/Chart.yaml", "jsonpath": "$.appVersion" },
+        { "type": "json", "path": "web/package.json", "jsonpath": "$.version" }
+      ]
+    }
+  }
+}

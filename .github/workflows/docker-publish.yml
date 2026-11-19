@@ -1,0 +1,112 @@
+name: Publish release
+
+# Fires on a real release tag (created by release-please, see release-please.yml)
+# so every published artifact corresponds to a real, versioned release — never
+# an arbitrary main-branch commit. workflow_dispatch exists for two reasons: (1)
+# release-please.yml chain-triggers it explicitly after creating a release,
+# since the default GITHUB_TOKEN it uses cannot itself trigger a tag-push
+# event; (2) it lets you manually (re-)publish an existing tag.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to build and publish, e.g. v0.2.0"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-publish-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      major_minor: ${{ steps.version.outputs.major_minor }}
+      major: ${{ steps.version.outputs.major }}
+      image: ${{ steps.version.outputs.image }}
+    steps:
+      - name: Compute release version
+        id: version
+        env:
+          RAW_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Extract the trailing X.Y.Z regardless of any tag prefix (v1.2.3,
+          # mailcatcher-v1.2.3, etc.) — robust to release-please's tag format,
+          # which is config-driven (release-please-config.json
+          # include-component-in-tag) and has changed once already.
+          version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+$' <<<"$RAW_TAG" || true)
+          if [ -z "$version" ]; then
+            echo "::error::could not extract a semver version from tag '$RAW_TAG'"
+            exit 1
+          fi
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          {
+            echo "version=$version"
+            echo "major_minor=$(cut -d. -f1,2 <<<"$version")"
+            echo "major=$(cut -d. -f1 <<<"$version")"
+            echo "image=$image"
+          } >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ${{ needs.prepare.outputs.image }}:${{ needs.prepare.outputs.version }}
+            ${{ needs.prepare.outputs.image }}:${{ needs.prepare.outputs.major_minor }}
+            ${{ needs.prepare.outputs.image }}:${{ needs.prepare.outputs.major }}
+            ${{ needs.prepare.outputs.image }}:latest
+
+  publish-chart:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+
+      - name: Verify Chart.yaml version matches the release tag
+        run: |
+          set -euo pipefail
+          chart_version=$(yq -r '.version' chart/Chart.yaml)
+          if [ "$chart_version" != "${{ needs.prepare.outputs.version }}" ]; then
+            echo "::error::Chart.yaml version ($chart_version) does not match release tag (${{ needs.prepare.outputs.version }})"
+            exit 1
+          fi
+
+      - name: Package and push chart
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+          helm package chart --destination /tmp
+          # Final chart location: oci://ghcr.io/<owner>/chart:<version>
+          helm push "/tmp/mailcatcher-${{ needs.prepare.outputs.version }}.tgz" "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"

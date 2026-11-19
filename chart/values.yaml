@@ -1,0 +1,149 @@
+# Default values for mailcatcher.
+
+# SQLite makes this a single-writer application: keep one replica.
+replicaCount: 1
+
+image:
+  repository: ghcr.io/taliamarine/mailcatcher
+  tag: "" # defaults to Chart.appVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# --- Web UI and API (ClusterIP service behind a gateway) ---
+http:
+  port: 1080
+
+# Gateway API HTTPRoute for the web UI. TLS ends at the gateway.
+gateway:
+  enabled: true
+  host: "" # required when enabled, e.g. mail.example.com
+  annotations: {}
+  parentRefs:
+    - name: default-gateway
+      namespace: envoy-gateway-system
+      sectionName: https
+
+# Without OIDC (or a bearer token) the UI would be open to everyone who can reach
+# it. Set this to true to deliberately run with no authentication at all.
+authDisabled: false
+
+# --- OIDC sign-in (Authorization Code + PKCE, no client secret) ---
+# Create a *public* client in your identity provider (authentik: client type
+# "Public") with the redirect URI https://<gateway.host>/auth/callback.
+oidc:
+  issuerUrl: ""
+  clientId: ""
+  # Only for confidential clients; leave unset for the usual public client.
+  clientSecretRef:
+    name: ""
+    key: ""
+
+# Key that signs session cookies. By default the app creates the Secret itself
+# on first start (the chart never renders secret material, so GitOps tools see
+# no drift). Set autoGenerate=false to supply your own Secret.
+sessionKey:
+  autoGenerate: true
+  secretName: "" # defaults to <fullname>-session
+  key: key
+
+# Optional static bearer token for app-to-app access to /api/v1/message.
+authToken:
+  secretRef:
+    name: ""
+    key: token
+
+# --- Mail ports (SMTP in, IMAP out), one LoadBalancer Service ---
+mail:
+  # Public DNS name of the mail Service. Published by external-dns and used in
+  # the TLS certificate and in the connection details shown in the UI.
+  hostname: ""
+  service:
+    type: LoadBalancer # ClusterIP | NodePort | LoadBalancer
+    annotations: {} # e.g. lbipam.cilium.io/ips: "192.168.1.201"
+    loadBalancerClass: ""
+    externalTrafficPolicy: ""
+
+smtp:
+  port: 1025 # container port; plain SMTP, STARTTLS when a certificate is configured
+  servicePort: 25
+  tls:
+    enabled: false # also listen for implicit TLS (SMTPS)
+    port: 1465
+    servicePort: 465
+
+# Users create their own IMAP login in the UI; it is stored in a Kubernetes
+# Secret (username + bcrypt hash) in this namespace. Requires OIDC.
+imap:
+  enabled: false
+  port: 1143 # container ports
+  tlsPort: 1993
+  servicePort: 143 # STARTTLS
+  tlsServicePort: 993 # implicit TLS (IMAPS)
+
+# --- TLS certificate for IMAPS, SMTPS and STARTTLS ---
+# Use either certManager (renders a Certificate) or secretName (an existing
+# kubernetes.io/tls Secret). With neither, the app uses a self-signed
+# certificate and logs a warning.
+tls:
+  secretName: ""
+  certManager:
+    enabled: false
+    issuerRef:
+      name: ""
+      kind: ClusterIssuer
+      group: cert-manager.io
+    dnsNames: [] # defaults to mail.hostname
+
+# --- Storage ---
+# Captured mail lives in SQLite under /data. Without persistence it is
+# discarded when the pod restarts, which suits a throwaway catcher.
+persistence:
+  enabled: false
+  size: 2Gi
+  storageClass: ""
+  existingClaim: ""
+  accessModes: [ReadWriteOnce]
+
+env:
+  RETENTION_DAYS: "100"
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+
+extraEnv: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

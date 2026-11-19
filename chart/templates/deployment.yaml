@@ -1,0 +1,151 @@
+{{- include "mailcatcher.validate" . }}
+{{- $tls := include "mailcatcher.tlsSecretName" . | trim }}
+{{- $oidc := ne .Values.oidc.issuerUrl "" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mailcatcher.fullname" . }}
+  labels:
+    {{- include "mailcatcher.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate # SQLite and a RWO volume cannot be shared by two pods
+  selector:
+    matchLabels:
+      {{- include "mailcatcher.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mailcatcher.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "mailcatcher.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mailcatcher
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - { name: http, containerPort: {{ .Values.http.port }}, protocol: TCP }
+            - { name: smtp, containerPort: {{ .Values.smtp.port }}, protocol: TCP }
+            {{- if .Values.smtp.tls.enabled }}
+            - { name: smtps, containerPort: {{ .Values.smtp.tls.port }}, protocol: TCP }
+            {{- end }}
+            {{- if .Values.imap.enabled }}
+            - { name: imap, containerPort: {{ .Values.imap.port }}, protocol: TCP }
+            - { name: imaps, containerPort: {{ .Values.imap.tlsPort }}, protocol: TCP }
+            {{- end }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - { name: HTTP_PORT, value: {{ .Values.http.port | quote }} }
+            - { name: SMTP_PORT, value: {{ .Values.smtp.port | quote }} }
+            - { name: DATABASE_PATH, value: /data/mailcatcher.db }
+            {{- if .Values.smtp.tls.enabled }}
+            - { name: SMTP_TLS_PORT, value: {{ .Values.smtp.tls.port | quote }} }
+            {{- end }}
+            {{- if .Values.gateway.host }}
+            - { name: BASE_URL, value: {{ printf "https://%s" .Values.gateway.host | quote }} }
+            {{- end }}
+            {{- if $oidc }}
+            - { name: OIDC_ISSUER, value: {{ .Values.oidc.issuerUrl | quote }} }
+            - { name: OIDC_CLIENT_ID, value: {{ .Values.oidc.clientId | quote }} }
+            {{- if .Values.oidc.clientSecretRef.name }}
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oidc.clientSecretRef.name }}
+                  key: {{ .Values.oidc.clientSecretRef.key }}
+            {{- end }}
+            - { name: SESSION_KEY_SECRET_NAME, value: {{ include "mailcatcher.sessionSecretName" . | quote }} }
+            - { name: SESSION_KEY_SECRET_KEY, value: {{ .Values.sessionKey.key | quote }} }
+            {{- else }}
+            - { name: AUTH_DISABLED, value: {{ .Values.authDisabled | quote }} }
+            {{- end }}
+            {{- if .Values.authToken.secretRef.name }}
+            - name: AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.authToken.secretRef.name }}
+                  key: {{ .Values.authToken.secretRef.key }}
+            {{- end }}
+            {{- if .Values.imap.enabled }}
+            - { name: IMAP_ENABLED, value: "true" }
+            - { name: IMAP_PORT, value: {{ .Values.imap.port | quote }} }
+            - { name: IMAP_TLS_PORT, value: {{ .Values.imap.tlsPort | quote }} }
+            - { name: CREDENTIAL_STORE, value: kubernetes }
+            - { name: IMAP_PUBLIC_HOST, value: {{ .Values.mail.hostname | quote }} }
+            - { name: IMAP_PUBLIC_PORT, value: {{ .Values.imap.servicePort | quote }} }
+            - { name: IMAP_PUBLIC_TLS_PORT, value: {{ .Values.imap.tlsServicePort | quote }} }
+            {{- end }}
+            {{- if $tls }}
+            - { name: TLS_CERT_FILE, value: /tls/tls.crt }
+            - { name: TLS_KEY_FILE, value: /tls/tls.key }
+            {{- end }}
+            {{- range $key, $value := .Values.env }}
+            - { name: {{ $key }}, value: {{ $value | quote }} }
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            failureThreshold: 30
+            periodSeconds: 2
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: tmp, mountPath: /tmp }
+            {{- if $tls }}
+            - { name: tls, mountPath: /tls, readOnly: true }
+            {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ default (include "mailcatcher.fullname" .) .Values.persistence.existingClaim }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- if $tls }}
+        - name: tls
+          secret:
+            secretName: {{ $tls }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

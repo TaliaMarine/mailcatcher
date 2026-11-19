@@ -1,0 +1,56 @@
+:root {
+  --mc-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --mc-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.v-application {
+  font-family: var(--mc-sans) !important;
+  font-size: 0.9375rem;
+  letter-spacing: 0;
+}
+
+/* Real machine values only: addresses, ids, timestamps, sizes, ports. */
+.mono {
+  font-family: var(--mc-mono);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.v-application .text-h6,
+.v-application .text-h5 {
+  font-family: var(--mc-sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
+.mc-rule-r { border-right: 1px solid rgb(var(--v-border-color)); }
+.mc-rule-b { border-bottom: 1px solid rgb(var(--v-border-color)); }
+.mc-inset { background: rgb(var(--v-theme-inset)); border: 1px solid rgb(var(--v-border-color)); border-radius: 6px; }
+.mc-muted { color: rgb(var(--v-theme-on-surface-variant)); }
+
+/* Selectable rows: an inset fill plus a petrol edge marks the active one. */
+.mc-row {
+  position: relative;
+  cursor: pointer;
+  border-bottom: 1px solid rgb(var(--v-border-color));
+  transition: background-color 0.12s;
+}
+.mc-row:hover { background: rgb(var(--v-theme-inset)); }
+.mc-row--active { background: rgb(var(--v-theme-inset)); }
+.mc-row--active::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: rgb(var(--v-theme-primary));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

@@ -1,0 +1,20 @@
+{{- if .Values.tls.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "mailcatcher.fullname" . }}
+  labels:
+    {{- include "mailcatcher.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "mailcatcher.tlsSecretName" . }}
+  issuerRef:
+    {{- toYaml .Values.tls.certManager.issuerRef | nindent 4 }}
+  dnsNames:
+    {{- range (default (list .Values.mail.hostname) .Values.tls.certManager.dnsNames) }}
+    - {{ . | quote }}
+    {{- end }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+{{- end }}
