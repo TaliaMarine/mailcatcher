@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/TaliaMarine/mailcatcher/compare/v1.4.0...v1.5.0) (2026-11-19)
+
+
+### Features
+
+* **ui:** show SMTP connection settings on the mail client access page ([aa91bec](https://github.com/TaliaMarine/mailcatcher/commit/aa91bec1b4f715dccf521316098ccc6de8eb8728))
+
+
+### Bug Fixes
+
+* **smtp:** advertise AUTH (PLAIN, LOGIN) so Apple Mail and Outlook can send ([1c9e917](https://github.com/TaliaMarine/mailcatcher/commit/1c9e9172783e328cdc1ded971242d90ce7493863))
+
 ## [1.4.0](https://github.com/TaliaMarine/mailcatcher/compare/v1.3.10...v1.4.0) (2026-11-19)
 
 
